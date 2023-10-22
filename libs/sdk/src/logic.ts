@@ -185,9 +185,9 @@ export const initLogic = <TContract extends GameContract>(
     await triggerInterceptor(`before-commit:*`, ctx);
     await triggerInterceptor(`before-commit:${type}`, ctx);
 
-    // const draft = createDraft(state);
+    const draft = createDraft(state);
     events[type]({ state, input: validationResult.data });
-    // state = finishDraft(draft);
+    state = finishDraft(draft);
     history.push({ type, input });
 
     await triggerInterceptor(`after-commit:*`, ctx);
@@ -206,7 +206,6 @@ export const initLogic = <TContract extends GameContract>(
     commit,
 
     dispatch(type, input) {
-      console.log('RECEIVED', type, input);
       actionQueue.add(async () => {
         const schema = contract.actions[type as keyof typeof contract.actions];
 
