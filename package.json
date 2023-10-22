@@ -1,0 +1,25 @@
+{
+  "name": "root",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "game-engine": "yarn workspace @daria/sdk",
+    "game-client": "yarn workspace @daria/game-client",
+    "client": "yarn workspace @daria/client",
+    "server": "yarn workspace @daria/server",
+    "build": "turbo run build",
+    "start": "yarn server start"
+  },
+  "workspaces": {
+    "packages": [
+      "libs/*",
+      "apps/*",
+      "configs/*"
+    ]
+  },
+  "dependencies": {
+    "rimraf": "^5.0.1",
+    "shx": "^0.3.4",
+    "turbo": "^1.7.0"
+  }
+}

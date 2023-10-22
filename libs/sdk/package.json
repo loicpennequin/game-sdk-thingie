@@ -1,0 +1,25 @@
+{
+  "name": "@daria/sdk",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@types/rbush": "^3.0.0",
+    "eslint-config-daria": "*",
+    "tsup": "^6.4.0",
+    "typescript": "~5.0.0"
+  },
+  "dependencies": {
+    "@daria/shared": "*",
+    "immer": "^10.0.3",
+    "mitt": "^3.0.1",
+    "nanoid": "^4.0.2",
+    "socket.io": "^4.7.2",
+    "socket.io-client": "^4.7.2",
+    "ts-brand": "^0.0.2",
+    "zipson": "^0.2.12",
+    "zod": "^3.21.4"
+  },
+  "scripts": {
+    "dev": "echo 1"
+  }
+}
