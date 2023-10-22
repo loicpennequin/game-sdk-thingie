@@ -186,7 +186,7 @@ export const initLogic = <TContract extends GameContract>(
     await triggerInterceptor(`before-commit:${type}`, ctx);
 
     const draft = createDraft(state);
-    events[type]({ state, input: validationResult.data });
+    events[type]({ state: draft, input: validationResult.data });
     state = finishDraft(draft);
     history.push({ type, input });
 
