@@ -18,18 +18,36 @@ export const initGameClient = <
   socket: Socket,
   contract: TContract,
   impl: TImpl
-): GameClient<TContract> => {
+): Promise<GameClient<TContract>> => {
   const logic = initLogic(contract, impl);
 
-  socket.on('game:event', payload => {
-    logic.commit(payload);
-  });
+  const onReady = () => {
+    socket.on('game:event', payload => {
+      logic.commit(payload);
+    });
+    return {
+      logic,
 
-  return {
-    logic,
-
-    send(type, input) {
-      socket.emit('game:action', { type, input });
-    }
+      send<TName extends ActionName<TContract>>(
+        type: TName,
+        input: z.infer<TContract['actions'][TName]>
+      ) {
+        socket.emit('game:action', { type, input });
+      }
+    };
   };
+
+  return new Promise(resolve => {
+    socket.on('game:history', history => {
+      logic.hydrateWithHistory(history);
+
+      resolve(onReady());
+    });
+
+    socket.on('game:state', state => {
+      logic.hydrateWithState(state);
+
+      resolve(onReady());
+    });
+  });
 };

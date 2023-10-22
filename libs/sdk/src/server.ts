@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { GameContract } from './contract';
 import { GameLogic, GameLogicImplementation, initLogic } from './logic';
 import { nanoid } from 'nanoid';
-import { isObject } from '@daria/shared';
+import { exhaustiveSwitch, isObject } from '@daria/shared';
 import { z } from 'zod';
 
 export type PlayerId = string;
@@ -22,7 +22,8 @@ export const initGameServer = <
 >(
   io: Server,
   contract: TContract,
-  impl: TImpl
+  impl: TImpl,
+  { hydrateMode }: { hydrateMode: 'state' | 'history' } = { hydrateMode: 'state' }
 ): GameServer<TContract, TImpl> => {
   const gameId = nanoid();
   const logic = initLogic(contract, impl);
@@ -50,11 +51,19 @@ export const initGameServer = <
     logic,
 
     join(socket) {
-      return socket.join(gameId);
+      socket.join(gameId);
+      switch (hydrateMode) {
+        case 'history':
+          return io.to(socket.id).emit('game:history', logic.history);
+        case 'state':
+          return io.to(socket.id).emit('game:state', logic.state);
+        default:
+          exhaustiveSwitch(hydrateMode);
+      }
     },
 
     leave(socket) {
-      return socket.leave(gameId);
+      socket.leave(gameId);
     }
   };
 };

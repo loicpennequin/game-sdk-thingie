@@ -23,16 +23,16 @@ type EventDispatcher<TContract extends GameContract> = <
 }) => void;
 
 export type GameLogicImplementation<TContract extends GameContract> = {
-  initialState: z.infer<TContract['state']>;
+  initialState: GameState<TContract>;
   events: {
     [EventKey in keyof TContract['events']]: (ctx: {
-      state: z.infer<TContract['state']>;
+      state: GameState<TContract>;
       readonly input: z.infer<TContract['events'][EventKey]>;
     }) => void;
   };
   actions: {
     [ActionKey in keyof TContract['actions']]: (ctx: {
-      readonly state: z.infer<TContract['state']>;
+      readonly state: GameState<TContract>;
       readonly input: z.infer<TContract['actions'][ActionKey]>;
       commit: EventDispatcher<TContract>;
     }) => void;
@@ -79,6 +79,8 @@ export type EventName<TContract extends GameContract> = Extract<
   string
 >;
 
+export type GameState<TContract extends GameContract> = z.infer<TContract['state']>;
+
 type ActionEventPrefix = 'before-action' | 'after-action';
 type CommitEventPrefix = 'before-commit' | 'after-commit';
 type EventSuffix<TName extends string> = TName | '*';
@@ -91,14 +93,14 @@ type ActionEventContext<
   TContract extends GameContract,
   TName extends ActionName<TContract>
 > = {
-  state: z.infer<TContract['state']>;
+  state: GameState<TContract>;
   action: { type: TName; input: z.infer<TContract['actions'][TName]> };
 };
 type CommitEventContext<
   TContract extends GameContract,
   TName extends EventName<TContract>
 > = {
-  state: z.infer<TContract['state']>;
+  state: GameState<TContract>;
   event: { type: TName; input: z.infer<TContract['events'][TName]> };
 };
 
@@ -117,10 +119,11 @@ type GameEmitter<TContract extends GameContract> = Emitter<{
 }>;
 
 export type GameLogic<TContract extends GameContract> = {
-  readonly state: z.infer<TContract['state']>;
+  readonly state: GameState<TContract>;
   readonly history: GameEventHistory<TContract>;
 
-  hydrate(history: GameEventHistory<TContract>): void;
+  hydrateWithHistory(history: GameEventHistory<TContract>): void;
+  hydrateWithState(state: GameState<TContract>): void;
 
   dispatch: ActionDispatcher<TContract>;
   commit: EventDispatcher<TContract>;
@@ -135,7 +138,7 @@ export const initLogic = <TContract extends GameContract>(
   contract: TContract,
   { initialState, actions, events }: GameLogicImplementation<TContract>
 ): GameLogic<TContract> => {
-  let state = contract.state.parse(initialState) as z.infer<TContract['state']>;
+  let state = contract.state.parse(initialState) as GameState<TContract>;
   let history: GameEventHistory<TContract> = [];
 
   const interceptors = new Map<GameEmitterEventName<TContract>, Set<AnyFunction>>();
@@ -227,12 +230,12 @@ export const initLogic = <TContract extends GameContract>(
       });
     },
 
-    hydrate(events) {
+    hydrateWithHistory(events) {
       if (_hasCommited) {
         throw new Error('Cannot hydrate game: actions have already been dispatched');
       }
 
-      const keys = Object.keys(contract);
+      const keys = Object.keys(contract.events);
       const historySchema = z
         .object({
           type: z
@@ -251,6 +254,17 @@ export const initLogic = <TContract extends GameContract>(
       state = contract.state.parse(initialState);
       history = [];
       validatedEvents.data.forEach(event => commit(event as any));
+    },
+
+    hydrateWithState(newState) {
+      const validatedState = contract.state.safeParse(newState);
+
+      if (!validatedState.success) {
+        throw new Error('Invalid history');
+      }
+
+      state = newState;
+      history = [];
     },
 
     onBeforeAction(name, cb) {
