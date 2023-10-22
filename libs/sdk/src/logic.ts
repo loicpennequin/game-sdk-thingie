@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { GameContract } from './contract';
 import { ZodInferOrType } from './type-utils';
 import { AnyFunction, Values } from '@daria/shared';
-import { Emitter } from 'mitt';
+import mitt, { Emitter } from 'mitt';
 import { asyncQueue } from './utils';
 import { createDraft, finishDraft } from 'immer';
 
@@ -185,9 +185,9 @@ export const initLogic = <TContract extends GameContract>(
     await triggerInterceptor(`before-commit:*`, ctx);
     await triggerInterceptor(`before-commit:${type}`, ctx);
 
-    const draft = createDraft(state);
-    events[type]({ state: draft, input: validationResult.data });
-    state = finishDraft(draft);
+    // const draft = createDraft(state);
+    events[type]({ state, input: validationResult.data });
+    // state = finishDraft(draft);
     history.push({ type, input });
 
     await triggerInterceptor(`after-commit:*`, ctx);
@@ -206,12 +206,12 @@ export const initLogic = <TContract extends GameContract>(
     commit,
 
     dispatch(type, input) {
+      console.log('RECEIVED', type, input);
       actionQueue.add(async () => {
         const schema = contract.actions[type as keyof typeof contract.actions];
 
         const validationResult = schema.safeParse(input);
         if (!validationResult.success) {
-          console.log('Invalid action input', validationResult.error);
           return null;
         }
 

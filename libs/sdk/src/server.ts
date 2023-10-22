@@ -11,8 +11,8 @@ export type GameServer<
   TContract extends GameContract,
   TImpl extends GameLogicImplementation<TContract>
 > = {
-  join(socket: Socket): void;
-  leave(socket: Socket): void;
+  subscribe(socket: Socket): void;
+  unsubscribe(socket: Socket): void;
   logic: GameLogic<TContract>;
 };
 
@@ -50,7 +50,7 @@ export const initGameServer = <
   return {
     logic,
 
-    join(socket) {
+    subscribe(socket) {
       socket.join(gameId);
       switch (hydrateMode) {
         case 'history':
@@ -62,7 +62,7 @@ export const initGameServer = <
       }
     },
 
-    leave(socket) {
+    unsubscribe(socket) {
       socket.leave(gameId);
     }
   };

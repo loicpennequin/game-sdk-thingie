@@ -2,7 +2,7 @@
 import { io } from "socket.io-client";
 import { GameState, initGameClient } from "@daria/sdk";
 import { Nullable, contract, implementation } from "@daria/shared";
-import { ref } from "vue";
+import { ref, toRaw } from "vue";
 
 const socket = io(import.meta.env.VITE_API_URL, {
   transports: ["websocket"],
@@ -12,6 +12,7 @@ const socket = io(import.meta.env.VITE_API_URL, {
 const state = ref<Nullable<GameState<typeof contract>>>();
 const client = await initGameClient(socket, contract, implementation);
 client.logic.onAfterEvent("*", (ctx) => {
+  console.log(toRaw(state.value) === ctx.state);
   state.value = ctx.state;
 });
 </script>

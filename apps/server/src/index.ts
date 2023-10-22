@@ -12,11 +12,11 @@ const main = () => {
   const game = initGameServer(io, contract, implementation);
 
   io.on('connection', socket => {
-    game.join(socket);
+    game.subscribe(socket);
     game.logic.dispatch('join', socket.id);
 
     socket.on('disconnect', () => {
-      game.leave(socket);
+      game.unsubscribe(socket);
       game.logic.dispatch('leave', socket.id);
     });
   });
