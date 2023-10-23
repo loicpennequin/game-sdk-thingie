@@ -11,8 +11,10 @@ export const asyncQueue = <T extends AnyFunction = AnyFunction>() => {
   const tasks: T[] = [];
 
   let isRunning = false;
+  let isPaused = false;
 
   const process = async () => {
+    isPaused = false;
     if (!tasks.length) return;
     isRunning = true;
 
@@ -27,8 +29,9 @@ export const asyncQueue = <T extends AnyFunction = AnyFunction>() => {
     add(task: T) {
       tasks.push(task);
       if (isRunning) return;
-
+      if (isPaused) return;
       process();
-    }
+    },
+    process() {}
   };
 };

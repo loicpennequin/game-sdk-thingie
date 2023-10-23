@@ -25,9 +25,8 @@ export const initGameClient = <
   socket: Socket,
   contract: TContract,
   impl: TImpl
-): Promise<GameClient<TContract>> => {
+): GameClient<TContract> => {
   const logic = initLogic(contract, impl);
-
   const queue = asyncQueue();
 
   const resync = (to: number) =>
@@ -38,8 +37,8 @@ export const initGameClient = <
         (missingevents: GameEventHistory<TContract>) => {
           missingevents.forEach(event => {
             logic.commit(event as any);
-            resolve();
           });
+          resolve();
         }
       );
     });
@@ -56,30 +55,28 @@ export const initGameClient = <
         logic.commit(payload);
       });
     });
-
-    return {
-      logic,
-
-      send<TName extends ActionName<TContract>>(
-        type: TName,
-        input: z.infer<TContract['actions'][TName]>
-      ) {
-        socket.emit('game:action', { type, input });
-      }
-    };
   };
 
-  return new Promise(resolve => {
-    socket.on('game:history', history => {
-      logic.hydrateWithHistory(history);
+  socket.on('game:history', history => {
+    logic.hydrateWithHistory(history);
 
-      resolve(onReady());
-    });
-
-    socket.on('game:state', ({ state, nextEventId }) => {
-      logic.hydrateWithState(state, nextEventId);
-
-      resolve(onReady());
-    });
+    onReady();
   });
+
+  socket.on('game:state', ({ state, nextEventId }) => {
+    logic.hydrateWithState(state, nextEventId);
+
+    onReady();
+  });
+
+  return {
+    logic,
+
+    send<TName extends ActionName<TContract>>(
+      type: TName,
+      input: z.infer<TContract['actions'][TName]>
+    ) {
+      socket.emit('game:action', { type, input });
+    }
+  };
 };

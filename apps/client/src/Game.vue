@@ -12,7 +12,7 @@ const socket = io(import.meta.env.VITE_API_URL, {
 const state = ref<Nullable<GameState<typeof contract>>>();
 const nextEventId = ref(0);
 
-const client = await initGameClient(socket, contract, implementation);
+const client = initGameClient(socket, contract, implementation);
 client.logic.onAfterEvent("*", (ctx) => {
   state.value = ctx.state;
   nextEventId.value = client.logic.nextEventId;

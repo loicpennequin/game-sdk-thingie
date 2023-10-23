@@ -1,9 +1,10 @@
 import { Server, Socket } from 'socket.io';
 import { GameContract } from './contract';
-import { GameLogic, GameLogicImplementation, initLogic } from './logic';
+import { GameEvent, GameLogic, GameLogicImplementation, initLogic } from './logic';
 import { nanoid } from 'nanoid';
 import { exhaustiveSwitch } from '@daria/shared';
 import { z } from 'zod';
+import { GameEventHistory } from '.';
 
 export type PlayerId = string;
 
@@ -28,8 +29,12 @@ export const initGameServer = <
   const gameId = nanoid();
   const logic = initLogic(contract, impl);
 
+  const eventCache = new Map<number, GameEventHistory<TContract>[number]>();
+
   logic.onAfterEvent('*', ctx => {
-    io.in(gameId).emit('game:event', { ...ctx.event, id: ctx.id });
+    const event = { ...ctx.event, id: ctx.id };
+    eventCache.set(ctx.id, event);
+    io.in(gameId).emit('game:event', event);
   });
 
   io.on('connection', socket => {
@@ -47,7 +52,14 @@ export const initGameServer = <
     });
 
     socket.on('game:resync', ({ from, to }, ack) => {
-      ack(logic.history.filter(event => event.id > from && event.id < to));
+      const events: GameEventHistory<TContract> = [];
+      for (let i = from + 1; i < to; i++) {
+        const event = eventCache.get(i);
+        if (event) {
+          events.push(event);
+        }
+      }
+      ack(events);
     });
   });
 
