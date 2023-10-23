@@ -66,9 +66,9 @@ type ActionListener<TContract extends GameContract> = <
 ) => () => void;
 
 type CommitListener<TContract extends GameContract> = <
-  TName extends EventName<TContract>
+  TName extends EventName<TContract> | '*'
 >(
-  name: TName | '*',
+  name: TName,
   cb: (ctx: CommitEventContext<TContract, TName>) => void
 ) => () => void;
 
@@ -101,10 +101,12 @@ type ActionEventContext<
 
 type CommitEventContext<
   TContract extends GameContract,
-  TName extends EventName<TContract>
+  TName extends EventName<TContract> | '*'
 > = {
   state: GameState<TContract>;
-  event: { type: TName; input: z.infer<TContract['events'][TName]> };
+  event: TName extends '*'
+    ? GameEvent<TContract>
+    : { type: TName; input: z.infer<TContract['events'][TName]> };
   id: number;
 };
 
@@ -172,7 +174,8 @@ export const initLogic = <TContract extends GameContract>(
 
   let _hasCommited = false;
 
-  const commit: EventDispatcher<TContract> = async ({ type, input }) => {
+  const commit: EventDispatcher<TContract> = async event => {
+    const { type, input } = event;
     const schema = contract.events[type as keyof typeof contract.events];
     const validationResult = schema.safeParse(input);
     if (!validationResult.success) {
@@ -186,7 +189,7 @@ export const initLogic = <TContract extends GameContract>(
       get state() {
         return state;
       },
-      event: { type, input },
+      event: event as any,
       id
     };
 
@@ -294,6 +297,7 @@ export const initLogic = <TContract extends GameContract>(
     },
 
     onBeforeEvent(name, cb) {
+      // @ts-expect-error not sure how to fix this
       const eventName: GameEmitterEventName<TContract> = `before-commit:${name}`;
 
       addInterceptor(eventName, cb);
@@ -301,6 +305,7 @@ export const initLogic = <TContract extends GameContract>(
     },
 
     onAfterEvent(name, cb) {
+      // @ts-expect-error not sure how to fix this
       const eventName: GameEmitterEventName<TContract> = `after-commit:${name}`;
 
       addInterceptor(eventName, cb);

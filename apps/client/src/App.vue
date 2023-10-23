@@ -2,18 +2,45 @@
 import { io } from "socket.io-client";
 import { GameState, initGameClient } from "@daria/sdk";
 import { Nullable, contract, implementation, randomInt } from "@daria/shared";
-import { ref } from "vue";
+import { VNodeRef, ref } from "vue";
 
 const socket = io(import.meta.env.VITE_API_URL, {
   transports: ["websocket"],
   autoConnect: true,
 });
 
+const CELL_SIZE = 48;
+const playerElements = ref<Record<string, HTMLElement>>({});
+const playerRef =
+  (player: string): VNodeRef =>
+  (el) => {
+    if (!el) return;
+
+    playerElements.value[player] = el as HTMLElement;
+  };
+
 const state = ref<Nullable<GameState<typeof contract>>>();
 
 const client = initGameClient(socket, contract, implementation);
+
 client.logic.onAfterEvent("*", (ctx) => {
-  state.value = ctx.state;
+  switch (ctx.event.type) {
+    case "move":
+      const playerId = ctx.event.input.playerId;
+
+      gsap.to(playerElements.value[playerId], {
+        duration: 0.2,
+        ease: Power2.easeOut,
+        onComplete: () => {
+          state.value = ctx.state;
+        },
+        top: CELL_SIZE * ctx.event.input.position.y,
+        left: CELL_SIZE * ctx.event.input.position.x,
+      });
+      break;
+    default:
+      state.value = ctx.state;
+  }
 });
 
 window.addEventListener("keydown", (e) => {
@@ -49,17 +76,17 @@ window.addEventListener("keydown", (e) => {
             })
           "
         />
-
-        <div
-          v-for="player in state.players"
-          :key="player.id"
-          :style="{
-            '--x': player.position.x,
-            '--y': player.position.y,
-          }"
-          class="player"
-        />
       </template>
+      <div
+        v-for="player in state.players"
+        :key="player.id"
+        :ref="playerRef(player.id)"
+        :style="{
+          '--x': player.position.x,
+          '--y': player.position.y,
+        }"
+        class="player"
+      />
     </div>
 
     <pre>
@@ -76,7 +103,7 @@ main {
 .map {
   --width: v-bind("state?.map.width");
   --height: v-bind("state?.map.width");
-  --cell-size: 5rem;
+  --cell-size: 48px;
 
   display: grid;
   position: relative;
