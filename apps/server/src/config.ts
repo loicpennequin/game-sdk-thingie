@@ -24,7 +24,7 @@ export const config = configSchema.parse({
 
   CORS: {
     ALLOWED_ORIGINS: [
-      'http://localhost:5173', // dev front end
+      'http://localhost:3000', // dev front end
       'http://localhost:5000', // local prod front end
       'http://localhost:3333' // vite preview
     ]

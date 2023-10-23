@@ -23,13 +23,13 @@ export const initGameServer = <
   io: Server,
   contract: TContract,
   impl: TImpl,
-  { hydrateMode }: { hydrateMode: 'state' | 'history' } = { hydrateMode: 'state' }
+  { hydrateMode }: { hydrateMode: 'state' | 'history' } = { hydrateMode: 'history' }
 ): GameServer<TContract, TImpl> => {
   const gameId = nanoid();
   const logic = initLogic(contract, impl);
 
   logic.onAfterEvent('*', ctx => {
-    io.in(gameId).emit('game:event', ctx.event);
+    io.in(gameId).emit('game:event', { ...ctx.event, id: ctx.id });
   });
 
   io.on('connection', socket => {
@@ -46,8 +46,8 @@ export const initGameServer = <
       logic.dispatch(action.type, action.input);
     });
 
-    socket.on('game:resync', (latestEventId, ack) => {
-      ack(logic.history.filter(event => event.id > latestEventId));
+    socket.on('game:resync', ({ from, to }, ack) => {
+      ack(logic.history.filter(event => event.id > from && event.id < to));
     });
   });
 
@@ -60,7 +60,9 @@ export const initGameServer = <
         case 'history':
           return io.to(socket.id).emit('game:history', logic.history);
         case 'state':
-          return io.to(socket.id).emit('game:state', logic.state);
+          return io
+            .to(socket.id)
+            .emit('game:state', { state: logic.state, nextEventId: logic.nextEventId });
         default:
           exhaustiveSwitch(hydrateMode);
       }

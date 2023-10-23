@@ -2,13 +2,13 @@ import { GameContract } from './contract';
 import { Socket } from 'socket.io-client';
 import {
   ActionName,
-  GameEvent,
   GameEventHistory,
   GameLogic,
   GameLogicImplementation,
   initLogic
 } from './logic';
 import { z } from 'zod';
+import { asyncQueue } from './utils';
 
 export type GameClient<TContract extends GameContract> = {
   send<TName extends ActionName<TContract>>(
@@ -28,23 +28,35 @@ export const initGameClient = <
 ): Promise<GameClient<TContract>> => {
   const logic = initLogic(contract, impl);
 
+  const queue = asyncQueue();
+
+  const resync = (to: number) =>
+    new Promise<void>(resolve => {
+      socket.emit(
+        'game:resync',
+        { from: logic.nextEventId, to },
+        (missingevents: GameEventHistory<TContract>) => {
+          missingevents.forEach(event => {
+            logic.commit(event as any);
+            resolve();
+          });
+        }
+      );
+    });
+
   const onReady = () => {
     socket.on('game:event', payload => {
-      if (payload.id > logic.nextEventId) {
-        socket.emit(
-          'game:resync',
-          logic.nextEventId,
-          (missingevents: GameEventHistory<TContract>) => {
-            missingevents.forEach(event => {
-              logic.commit(event as any);
-              logic.commit(payload);
-            });
-          }
-        );
-      } else {
+      queue.add(async () => {
+        if (payload.id < logic.nextEventId) return;
+
+        if (payload.id > logic.nextEventId) {
+          await resync(payload.id);
+        }
+
         logic.commit(payload);
-      }
+      });
     });
+
     return {
       logic,
 
@@ -64,8 +76,8 @@ export const initGameClient = <
       resolve(onReady());
     });
 
-    socket.on('game:state', state => {
-      logic.hydrateWithState(state);
+    socket.on('game:state', ({ state, nextEventId }) => {
+      logic.hydrateWithState(state, nextEventId);
 
       resolve(onReady());
     });

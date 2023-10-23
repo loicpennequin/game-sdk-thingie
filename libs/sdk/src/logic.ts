@@ -128,7 +128,7 @@ export type GameLogic<TContract extends GameContract> = {
   readonly nextEventId: number;
 
   hydrateWithHistory(history: GameEventHistory<TContract>): void;
-  hydrateWithState(state: GameState<TContract>): void;
+  hydrateWithState(state: GameState<TContract>, nextEventId: number): void;
 
   dispatch: ActionDispatcher<TContract>;
   commit: EventDispatcher<TContract>;
@@ -267,7 +267,7 @@ export const initLogic = <TContract extends GameContract>(
       validatedEvents.data.forEach(event => commit(event as any));
     },
 
-    hydrateWithState(newState) {
+    hydrateWithState(newState, id) {
       const validatedState = contract.state.safeParse(newState);
 
       if (!validatedState.success) {
@@ -276,6 +276,7 @@ export const initLogic = <TContract extends GameContract>(
 
       state = newState;
       history = [];
+      nextEventId = id;
     },
 
     onBeforeAction(name, cb) {

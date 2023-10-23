@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { io } from "socket.io-client";
 import { GameState, initGameClient } from "@daria/sdk";
-import { Nullable, contract, implementation } from "@daria/shared";
-import { ref, toRaw } from "vue";
+import { Nullable, contract, implementation, randomInt } from "@daria/shared";
+import { ref } from "vue";
 
 const socket = io(import.meta.env.VITE_API_URL, {
   transports: ["websocket"],
@@ -10,15 +10,30 @@ const socket = io(import.meta.env.VITE_API_URL, {
 });
 
 const state = ref<Nullable<GameState<typeof contract>>>();
+const nextEventId = ref(0);
+
 const client = await initGameClient(socket, contract, implementation);
 client.logic.onAfterEvent("*", (ctx) => {
-  console.log(toRaw(state.value) === ctx.state);
   state.value = ctx.state;
+  nextEventId.value = client.logic.nextEventId;
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Enter") {
+    client.send("move", {
+      playerId: socket.id,
+      position: {
+        x: randomInt(client.logic.state.map.width - 1),
+        y: randomInt(client.logic.state.map.height - 1),
+      },
+    });
+  }
 });
 </script>
 
 <template>
   <main>
+    {{ client.logic.nextEventId }}
     <div class="map" v-if="state">
       <template v-for="y in state.map.width">
         <div
@@ -48,6 +63,10 @@ client.logic.onAfterEvent("*", (ctx) => {
         />
       </template>
     </div>
+
+    <pre>
+      {{ state }}
+    </pre>
   </main>
 </template>
 
