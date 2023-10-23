@@ -1,6 +1,13 @@
 import { GameContract } from './contract';
 import { Socket } from 'socket.io-client';
-import { ActionName, GameLogic, GameLogicImplementation, initLogic } from './logic';
+import {
+  ActionName,
+  GameEvent,
+  GameEventHistory,
+  GameLogic,
+  GameLogicImplementation,
+  initLogic
+} from './logic';
 import { z } from 'zod';
 
 export type GameClient<TContract extends GameContract> = {
@@ -23,7 +30,20 @@ export const initGameClient = <
 
   const onReady = () => {
     socket.on('game:event', payload => {
-      logic.commit(payload);
+      if (payload.id > logic.nextEventId) {
+        socket.emit(
+          'game:resync',
+          logic.nextEventId,
+          (missingevents: GameEventHistory<TContract>) => {
+            missingevents.forEach(event => {
+              logic.commit(event as any);
+              logic.commit(payload);
+            });
+          }
+        );
+      } else {
+        logic.commit(payload);
+      }
     });
     return {
       logic,

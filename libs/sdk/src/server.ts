@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { GameContract } from './contract';
 import { GameLogic, GameLogicImplementation, initLogic } from './logic';
 import { nanoid } from 'nanoid';
-import { exhaustiveSwitch, isObject } from '@daria/shared';
+import { exhaustiveSwitch } from '@daria/shared';
 import { z } from 'zod';
 
 export type PlayerId = string;
@@ -44,6 +44,10 @@ export const initGameServer = <
 
       // action will be thoroughly validated in the dispatcher so it's fine to send any value
       logic.dispatch(action.type, action.input);
+    });
+
+    socket.on('game:resync', (latestEventId, ack) => {
+      ack(logic.history.filter(event => event.id > latestEventId));
     });
   });
 

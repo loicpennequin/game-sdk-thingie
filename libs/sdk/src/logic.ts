@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { GameContract } from './contract';
 import { ZodInferOrType } from './type-utils';
 import { AnyFunction, Values } from '@daria/shared';
-import mitt, { Emitter } from 'mitt';
+import { Emitter } from 'mitt';
 import { asyncQueue } from './utils';
 import { createDraft, finishDraft } from 'immer';
 
@@ -54,7 +54,9 @@ type EventMap<TContract extends GameContract> = {
   };
 };
 export type GameEvent<TContract extends GameContract> = Values<EventMap<TContract>>;
-export type GameEventHistory<TContract extends GameContract> = GameEvent<TContract>[];
+export type GameEventHistory<TContract extends GameContract> = (GameEvent<TContract> & {
+  id: number;
+})[];
 
 type ActionListener<TContract extends GameContract> = <
   TName extends ActionName<TContract>
@@ -96,12 +98,14 @@ type ActionEventContext<
   state: GameState<TContract>;
   action: { type: TName; input: z.infer<TContract['actions'][TName]> };
 };
+
 type CommitEventContext<
   TContract extends GameContract,
   TName extends EventName<TContract>
 > = {
   state: GameState<TContract>;
   event: { type: TName; input: z.infer<TContract['events'][TName]> };
+  id: number;
 };
 
 type GameEmitter<TContract extends GameContract> = Emitter<{
@@ -121,6 +125,7 @@ type GameEmitter<TContract extends GameContract> = Emitter<{
 export type GameLogic<TContract extends GameContract> = {
   readonly state: GameState<TContract>;
   readonly history: GameEventHistory<TContract>;
+  readonly nextEventId: number;
 
   hydrateWithHistory(history: GameEventHistory<TContract>): void;
   hydrateWithState(state: GameState<TContract>): void;
@@ -140,6 +145,7 @@ export const initLogic = <TContract extends GameContract>(
 ): GameLogic<TContract> => {
   let state = contract.state.parse(initialState) as GameState<TContract>;
   let history: GameEventHistory<TContract> = [];
+  let nextEventId = 0;
 
   const interceptors = new Map<GameEmitterEventName<TContract>, Set<AnyFunction>>();
   const addInterceptor = (name: GameEmitterEventName<TContract>, cb: AnyFunction) => {
@@ -175,11 +181,13 @@ export const initLogic = <TContract extends GameContract>(
 
     _hasCommited = true;
 
+    const id = nextEventId++;
     const ctx: CommitEventContext<TContract, typeof type> = {
       get state() {
         return state;
       },
-      event: { type, input }
+      event: { type, input },
+      id
     };
 
     await triggerInterceptor(`before-commit:*`, ctx);
@@ -188,7 +196,7 @@ export const initLogic = <TContract extends GameContract>(
     const draft = createDraft(state);
     events[type]({ state: draft, input: validationResult.data });
     state = finishDraft(draft);
-    history.push({ type, input });
+    history.push({ type, input, id });
 
     await triggerInterceptor(`after-commit:*`, ctx);
     await triggerInterceptor(`after-commit:${type}`, ctx);
@@ -201,6 +209,10 @@ export const initLogic = <TContract extends GameContract>(
 
     get history() {
       return history;
+    },
+
+    get nextEventId() {
+      return nextEventId;
     },
 
     commit,
