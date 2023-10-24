@@ -19,9 +19,10 @@ export const asyncQueue = <T extends AnyFunction = AnyFunction>() => {
     isRunning = true;
 
     while (tasks.length) {
+      console.log(tasks.length);
       await tasks.shift()!();
     }
-
+    console.log('task processed');
     isRunning = false;
   };
 

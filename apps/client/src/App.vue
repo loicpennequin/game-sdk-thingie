@@ -19,7 +19,9 @@ const playerRef =
     playerElements.value[player] = el as HTMLElement;
   };
 
-const client = initGameClient(socket, contract, implementation);
+const client = initGameClient(socket, contract, implementation, {
+  debug: true,
+});
 const state = ref<Nullable<GameState<typeof contract>>>();
 client.subscribe((newState) => {
   state.value = newState;
@@ -29,7 +31,7 @@ client.logic.onBeforeEvent("move", ({ event }) => {
   return new Promise<void>((resolve) => {
     const { position, playerId } = event.input;
     gsap.to(playerElements.value[playerId], {
-      duration: 0.2,
+      duration: 5,
       ease: Power2.easeOut,
       onComplete: resolve,
       top: CELL_SIZE * position.y,

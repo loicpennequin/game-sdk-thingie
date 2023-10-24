@@ -20,15 +20,42 @@ export type GameClient<TContract extends GameContract> = {
   logic: GameLogic<TContract>;
 };
 
+type ClientOptions = {
+  debug: boolean;
+};
 export const initGameClient = <
   TContract extends GameContract,
   TImpl extends GameLogicImplementation<TContract>
 >(
   socket: Socket,
   contract: TContract,
-  impl: TImpl
+  impl: TImpl,
+  opts: ClientOptions = { debug: false }
 ): GameClient<TContract> => {
   const logic = initLogic(contract, impl);
+
+  if (opts.debug) {
+    logic.onBeforeAction('*', ctx => {
+      console.groupCollapsed(`before-action:${ctx.action.type as string}`);
+      console.log(ctx);
+      console.groupEnd();
+    });
+    logic.onAfterAction('*', ctx => {
+      console.groupCollapsed(`after-action:${ctx.action.type as string}`);
+      console.log(ctx);
+      console.groupEnd();
+    });
+    logic.onBeforeEvent('*', ctx => {
+      console.groupCollapsed(`before-commit:${ctx.event.type as string}:${ctx.id}`);
+      console.log(ctx);
+      console.groupEnd();
+    });
+    logic.onAfterEvent('*', ctx => {
+      console.groupCollapsed(`after-commit:${ctx.event.type as string}:${ctx.id}`);
+      console.log(ctx);
+      console.groupEnd();
+    });
+  }
   const queue = asyncQueue();
 
   const resync = (to: number) =>
@@ -37,6 +64,9 @@ export const initGameClient = <
         'game:resync',
         { from: logic.nextEventId, to },
         (missingevents: GameEventHistory<TContract>) => {
+          if (opts.debug) {
+            console.log(`resyncing events ${logic.nextEventId} to ${to}`);
+          }
           missingevents.forEach(event => {
             logic.commit(event as any);
           });

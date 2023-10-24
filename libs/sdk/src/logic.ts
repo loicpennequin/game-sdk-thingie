@@ -17,10 +17,13 @@ type ActionDispatcher<TContract extends GameContract> = <
 type EventDispatcher<TContract extends GameContract> = <
   TName extends EventName<TContract>,
   TInput extends TContract['events'][TName] = TContract['events'][TName]
->(arg: {
-  type: TName;
-  input: ZodInferOrType<TInput>;
-}) => void;
+>(
+  arg: {
+    type: TName;
+    input: ZodInferOrType<TInput>;
+  },
+  opts?: { triggerInterceptors: boolean }
+) => void;
 
 export type GameLogicImplementation<TContract extends GameContract> = {
   initialState: GameState<TContract>;
@@ -185,7 +188,10 @@ export const initLogic = <TContract extends GameContract>(
 
   let _hasCommited = false;
 
-  const commit: EventDispatcher<TContract> = async event => {
+  const commit: EventDispatcher<TContract> = async (
+    event,
+    opts = { triggerInterceptors: true }
+  ) => {
     const { type, input } = event;
     const schema = contract.events[type as keyof typeof contract.events];
     const validationResult = schema.safeParse(input);
@@ -204,16 +210,20 @@ export const initLogic = <TContract extends GameContract>(
       id
     };
 
-    await triggerInterceptor(`before-commit:*`, ctx);
-    await triggerInterceptor(`before-commit:${type}`, ctx);
+    if (opts.triggerInterceptors) {
+      await triggerInterceptor(`before-commit:*`, ctx);
+      await triggerInterceptor(`before-commit:${type}`, ctx);
+    }
 
     const draft = createDraft(state);
     events[type]({ state: draft, input: validationResult.data });
     state = finishDraft(draft);
     history.push({ type, input, id });
 
-    await triggerInterceptor(`after-commit:*`, ctx);
-    await triggerInterceptor(`after-commit:${type}`, ctx);
+    if (opts.triggerInterceptors) {
+      await triggerInterceptor(`after-commit:*`, ctx);
+      await triggerInterceptor(`after-commit:${type}`, ctx);
+    }
   };
 
   return {
@@ -278,7 +288,9 @@ export const initLogic = <TContract extends GameContract>(
 
       state = contract.state.parse(initialState);
       history = [];
-      validatedEvents.data.forEach(event => commit(event as any));
+      validatedEvents.data.forEach(event => {
+        commit(event as any, { triggerInterceptors: false });
+      });
     },
 
     hydrateWithState(newState, id) {
