@@ -54,19 +54,28 @@ type EventMap<TContract extends GameContract> = {
   };
 };
 export type GameEvent<TContract extends GameContract> = Values<EventMap<TContract>>;
+
+type ActionMap<TContract extends GameContract> = {
+  [Key in keyof TContract['actions']]: {
+    type: Key;
+    input: z.infer<TContract['actions'][Key]>;
+  };
+};
+export type GameAction<TContract extends GameContract> = Values<ActionMap<TContract>>;
+
 export type GameEventHistory<TContract extends GameContract> = (GameEvent<TContract> & {
   id: number;
 })[];
 
 type ActionListener<TContract extends GameContract> = <
-  TName extends ActionName<TContract>
+  TName extends EventSuffix<ActionName<TContract>>
 >(
-  name: TName | '*',
+  name: TName,
   cb: (ctx: ActionEventContext<TContract, TName>) => void
 ) => () => void;
 
 type CommitListener<TContract extends GameContract> = <
-  TName extends EventName<TContract> | '*'
+  TName extends EventSuffix<EventName<TContract>>
 >(
   name: TName,
   cb: (ctx: CommitEventContext<TContract, TName>) => void
@@ -93,15 +102,17 @@ type GameEmitterEventName<TContract extends GameContract> =
 
 type ActionEventContext<
   TContract extends GameContract,
-  TName extends ActionName<TContract>
+  TName extends EventSuffix<ActionName<TContract>>
 > = {
   state: GameState<TContract>;
-  action: { type: TName; input: z.infer<TContract['actions'][TName]> };
+  action: TName extends '*'
+    ? GameAction<TContract>
+    : { type: TName; input: z.infer<TContract['actions'][TName]> };
 };
 
 type CommitEventContext<
   TContract extends GameContract,
-  TName extends EventName<TContract> | '*'
+  TName extends EventSuffix<EventName<TContract>>
 > = {
   state: GameState<TContract>;
   event: TName extends '*'
@@ -231,7 +242,7 @@ export const initLogic = <TContract extends GameContract>(
 
         const ctx: ActionEventContext<TContract, typeof type> = {
           state,
-          action: { type, input }
+          action: { type, input } as any
         };
 
         await triggerInterceptor(`before-action:*`, ctx);
@@ -283,6 +294,7 @@ export const initLogic = <TContract extends GameContract>(
     },
 
     onBeforeAction(name, cb) {
+      // @ts-expect-error not sure how to fix this
       const eventName: GameEmitterEventName<TContract> = `before-action:${name}`;
 
       addInterceptor(eventName, cb);
@@ -290,6 +302,7 @@ export const initLogic = <TContract extends GameContract>(
     },
 
     onAfterAction(name, cb) {
+      // @ts-expect-error not sure how to fix this
       const eventName: GameEmitterEventName<TContract> = `after-action:${name}`;
 
       addInterceptor(eventName, cb);

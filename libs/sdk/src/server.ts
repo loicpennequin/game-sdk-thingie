@@ -24,7 +24,9 @@ export const initGameServer = <
   io: Server,
   contract: TContract,
   impl: TImpl,
-  { hydrateMode }: { hydrateMode: 'state' | 'history' } = { hydrateMode: 'history' }
+  { historyHydrationMaxSize }: { historyHydrationMaxSize: number } = {
+    historyHydrationMaxSize: 1000
+  }
 ): GameServer<TContract, TImpl> => {
   const gameId = nanoid();
   const logic = initLogic(contract, impl);
@@ -68,15 +70,13 @@ export const initGameServer = <
 
     subscribe(socket) {
       socket.join(gameId);
-      switch (hydrateMode) {
-        case 'history':
-          return io.to(socket.id).emit('game:history', logic.history);
-        case 'state':
-          return io
-            .to(socket.id)
-            .emit('game:state', { state: logic.state, nextEventId: logic.nextEventId });
-        default:
-          exhaustiveSwitch(hydrateMode);
+      if (logic.history.length > historyHydrationMaxSize) {
+        io.to(socket.id).emit('game:state', {
+          state: logic.state,
+          nextEventId: logic.nextEventId
+        });
+      } else {
+        io.to(socket.id).emit('game:history', logic.history);
       }
     },
 

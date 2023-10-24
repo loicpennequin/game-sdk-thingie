@@ -19,28 +19,23 @@ const playerRef =
     playerElements.value[player] = el as HTMLElement;
   };
 
-const state = ref<Nullable<GameState<typeof contract>>>();
-
 const client = initGameClient(socket, contract, implementation);
+const state = ref<Nullable<GameState<typeof contract>>>();
+client.subscribe((newState) => {
+  state.value = newState;
+});
 
-client.logic.onAfterEvent("*", (ctx) => {
-  switch (ctx.event.type) {
-    case "move":
-      const playerId = ctx.event.input.playerId;
-
-      gsap.to(playerElements.value[playerId], {
-        duration: 0.2,
-        ease: Power2.easeOut,
-        onComplete: () => {
-          state.value = ctx.state;
-        },
-        top: CELL_SIZE * ctx.event.input.position.y,
-        left: CELL_SIZE * ctx.event.input.position.x,
-      });
-      break;
-    default:
-      state.value = ctx.state;
-  }
+client.logic.onBeforeEvent("move", ({ event }) => {
+  return new Promise<void>((resolve) => {
+    const { position, playerId } = event.input;
+    gsap.to(playerElements.value[playerId], {
+      duration: 0.2,
+      ease: Power2.easeOut,
+      onComplete: resolve,
+      top: CELL_SIZE * position.y,
+      left: CELL_SIZE * position.x,
+    });
+  });
 });
 
 window.addEventListener("keydown", (e) => {
@@ -109,8 +104,8 @@ main {
   position: relative;
   width: calc(var(--width) * var(--cell-size));
   height: calc(var(--height) * var(--cell-size));
-  grid-template-columns: repeat(--width, 1fr);
-  grid-template-rows: repeat(--width, 1fr);
+  grid-template-columns: repeat(var(--width), 1fr);
+  grid-template-rows: repeat(var(--heigh), 1fr);
   border: solid 1px black;
 }
 

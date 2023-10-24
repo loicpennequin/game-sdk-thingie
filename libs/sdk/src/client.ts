@@ -5,6 +5,7 @@ import {
   GameEventHistory,
   GameLogic,
   GameLogicImplementation,
+  GameState,
   initLogic
 } from './logic';
 import { z } from 'zod';
@@ -15,6 +16,7 @@ export type GameClient<TContract extends GameContract> = {
     name: TName,
     input: z.infer<TContract['actions'][TName]>
   ): void;
+  subscribe(cb: (state: GameState<TContract>) => void): () => void;
   logic: GameLogic<TContract>;
 };
 
@@ -71,6 +73,12 @@ export const initGameClient = <
 
   return {
     logic,
+
+    subscribe(cb) {
+      return logic.onAfterEvent('*', ctx => {
+        cb(ctx.state);
+      });
+    },
 
     send<TName extends ActionName<TContract>>(
       type: TName,

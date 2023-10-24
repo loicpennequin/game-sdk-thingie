@@ -1,0 +1,33 @@
+main {
+  display: grid;
+  place-content: center;
+}
+.map {
+  --width: 0;
+  --height: 0;
+  --cell-size: 48px;
+
+  display: grid;
+  position: relative;
+  width: calc(var(--width) * var(--cell-size));
+  height: calc(var(--height) * var(--cell-size));
+  grid-template-columns: repeat(var(--width), 1fr);
+  grid-template-rows: repeat(var(--heigh), 1fr);
+  border: solid 1px black;
+}
+
+.cell {
+  border: solid 1px black;
+  grid-column: var(--x);
+  grid-row: var(--y);
+  background-color: #ddd;
+}
+
+.player {
+  position: absolute;
+  top: calc(var(--cell-size) * var(--y));
+  left: calc(var(--cell-size) * var(--x));
+  background-color: red;
+  width: var(--cell-size);
+  aspect-ratio: 1;
+}
