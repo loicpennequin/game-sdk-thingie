@@ -31,7 +31,7 @@ client.logic.onBeforeEvent("move", ({ event }) => {
   return new Promise<void>((resolve) => {
     const { position, playerId } = event.input;
     gsap.to(playerElements.value[playerId], {
-      duration: 5,
+      duration: 0.2,
       ease: Power2.easeOut,
       onComplete: resolve,
       top: CELL_SIZE * position.y,

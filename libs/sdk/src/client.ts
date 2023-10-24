@@ -84,7 +84,7 @@ export const initGameClient = <
           await resync(payload.id);
         }
 
-        logic.commit(payload);
+        return logic.commit(payload);
       });
     });
   };
