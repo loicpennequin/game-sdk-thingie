@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { io } from "socket.io-client";
-import { GameState, initGameClient } from "@daria/sdk";
+import { type GameState, type GameEvent, initGameClient } from "@daria/sdk";
 import { Nullable, contract, implementation, randomInt } from "@daria/shared";
 import { VNodeRef, ref } from "vue";
+import { asyncQueue } from "@daria/sdk";
 
 const socket = io(import.meta.env.VITE_API_URL, {
   transports: ["websocket"],
@@ -22,23 +23,32 @@ const playerRef =
 const client = initGameClient(socket, contract, implementation, {
   debug: true,
 });
+const queue = asyncQueue();
 const state = ref<Nullable<GameState<typeof contract>>>();
-client.subscribe((newState) => {
-  state.value = newState;
-});
-
-client.logic.onBeforeEvent("move", ({ event }) => {
-  return new Promise<void>((resolve) => {
-    const { position, playerId } = event.input;
-    gsap.to(playerElements.value[playerId], {
-      duration: 0.2,
-      ease: Power2.easeOut,
-      onComplete: resolve,
-      top: CELL_SIZE * position.y,
-      left: CELL_SIZE * position.x,
-    });
+client.subscribe((newState, event) => {
+  queue.add(async () => {
+    await playFXSequence(event);
+    state.value = newState;
   });
 });
+
+const playFXSequence = (event: GameEvent<typeof contract>) => {
+  switch (event.type) {
+    case "move":
+      return new Promise<void>((resolve) => {
+        const { position, playerId } = event.input;
+        gsap.to(playerElements.value[playerId], {
+          duration: 0.2,
+          ease: Power2.easeOut,
+          onComplete: resolve,
+          top: CELL_SIZE * position.y,
+          left: CELL_SIZE * position.x,
+        });
+      });
+    default:
+      return;
+  }
+};
 
 window.addEventListener("keydown", (e) => {
   if (e.code === "Enter") {

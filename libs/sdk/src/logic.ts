@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import { GameContract } from './contract';
 import { ZodInferOrType } from './type-utils';
-import { AnyFunction, Values } from '@daria/shared';
-import { Emitter } from 'mitt';
-import { asyncQueue } from './utils';
+import { Values } from '@daria/shared';
+import mitt, { Emitter, EventType } from 'mitt';
 import { createDraft, finishDraft } from 'immer';
 
 type ActionDispatcher<TContract extends GameContract> = <
@@ -22,7 +21,7 @@ type EventDispatcher<TContract extends GameContract> = <
     type: TName;
     input: ZodInferOrType<TInput>;
   },
-  opts?: { triggerInterceptors: boolean }
+  opts?: { triggerListeners: boolean }
 ) => void;
 
 export type GameLogicImplementation<TContract extends GameContract> = {
@@ -127,11 +126,11 @@ type CommitEventContext<
 type GameEmitter<TContract extends GameContract> = Emitter<{
   [Key in GameEmitterEventName<TContract>]: Key extends `${infer Prefix}:${infer Suffix}`
     ? Prefix extends ActionEventPrefix
-      ? Suffix extends ActionName<TContract>
+      ? Suffix extends EventSuffix<ActionName<TContract>>
         ? ActionEventContext<TContract, Suffix>
         : never
       : Prefix extends CommitEventPrefix
-      ? Suffix extends EventName<TContract>
+      ? Suffix extends EventSuffix<EventName<TContract>>
         ? CommitEventContext<TContract, Suffix>
         : never
       : never
@@ -163,34 +162,11 @@ export const initLogic = <TContract extends GameContract>(
   let history: GameEventHistory<TContract> = [];
   let nextEventId = 0;
 
-  const interceptors = new Map<GameEmitterEventName<TContract>, Set<AnyFunction>>();
-  const addInterceptor = (name: GameEmitterEventName<TContract>, cb: AnyFunction) => {
-    if (!interceptors.has(name)) {
-      interceptors.set(name, new Set());
-    }
+  const emitter = mitt<Record<EventType, any>>();
 
-    interceptors.get(name)?.add(cb);
-  };
-  const removeInterceptor = (name: GameEmitterEventName<TContract>, cb: AnyFunction) => {
-    const listeners = interceptors.get(name);
-    if (!listeners) return;
-
-    listeners.delete(cb);
-  };
-  const triggerInterceptor = (name: GameEmitterEventName<TContract>, ctx: any) => {
-    const listeners = interceptors.get(name);
-    if (!listeners) return;
-
-    return Promise.all([...listeners].map(listener => listener(ctx)));
-  };
-
-  const actionQueue = asyncQueue();
-
-  let _hasCommited = false;
-
-  const commit: EventDispatcher<TContract> = async (
+  const commit: EventDispatcher<TContract> = (
     event,
-    opts = { triggerInterceptors: true }
+    opts = { triggerListeners: true }
   ) => {
     const { type, input } = event;
     const schema = contract.events[type as keyof typeof contract.events];
@@ -198,8 +174,6 @@ export const initLogic = <TContract extends GameContract>(
     if (!validationResult.success) {
       return null;
     }
-
-    _hasCommited = true;
 
     const id = nextEventId++;
     const ctx: CommitEventContext<TContract, typeof type> = {
@@ -210,9 +184,9 @@ export const initLogic = <TContract extends GameContract>(
       id
     };
 
-    if (opts.triggerInterceptors) {
-      await triggerInterceptor(`before-commit:*`, ctx);
-      await triggerInterceptor(`before-commit:${type}`, ctx);
+    if (opts.triggerListeners) {
+      emitter.emit(`before-commit:*`, ctx as any);
+      emitter.emit(`before-commit:${type}`, ctx as any);
     }
 
     const draft = createDraft(state);
@@ -220,9 +194,9 @@ export const initLogic = <TContract extends GameContract>(
     state = finishDraft(draft);
     history.push({ type, input, id });
 
-    if (opts.triggerInterceptors) {
-      await triggerInterceptor(`after-commit:*`, ctx);
-      await triggerInterceptor(`after-commit:${type}`, ctx);
+    if (opts.triggerListeners) {
+      emitter.emit(`after-commit:*`, ctx as any);
+      emitter.emit(`after-commit:${type}`, ctx as any);
     }
   };
 
@@ -242,34 +216,28 @@ export const initLogic = <TContract extends GameContract>(
     commit,
 
     dispatch(type, input) {
-      actionQueue.add(async () => {
-        const schema = contract.actions[type as keyof typeof contract.actions];
+      const schema = contract.actions[type as keyof typeof contract.actions];
 
-        const validationResult = schema.safeParse(input);
-        if (!validationResult.success) {
-          return null;
-        }
+      const validationResult = schema.safeParse(input);
+      if (!validationResult.success) {
+        return null;
+      }
 
-        const ctx: ActionEventContext<TContract, typeof type> = {
-          state,
-          action: { type, input } as any
-        };
+      const ctx: ActionEventContext<TContract, typeof type> = {
+        state,
+        action: { type, input } as any
+      };
 
-        await triggerInterceptor(`before-action:*`, ctx);
-        await triggerInterceptor(`before-action:${type}`, ctx);
+      emitter.emit(`before-action:*`, ctx as any);
+      emitter.emit(`before-action:${type}`, ctx as any);
 
-        actions[type]({ state, commit, input: validationResult.data });
+      actions[type]({ state, commit, input: validationResult.data });
 
-        await triggerInterceptor(`after-action:*`, ctx);
-        await triggerInterceptor(`after-action:${type}`, ctx);
-      });
+      emitter.emit(`after-action:*`, ctx as any);
+      emitter.emit(`after-action:${type}`, ctx as any);
     },
 
     hydrateWithHistory(events) {
-      if (_hasCommited) {
-        throw new Error('Cannot hydrate game: actions have already been dispatched');
-      }
-
       const keys = Object.keys(contract.events);
       const historySchema = z
         .object({
@@ -289,7 +257,7 @@ export const initLogic = <TContract extends GameContract>(
       state = contract.state.parse(initialState);
       history = [];
       validatedEvents.data.forEach(event => {
-        commit(event as any, { triggerInterceptors: false });
+        commit(event as any, { triggerListeners: false });
       });
     },
 
@@ -306,35 +274,31 @@ export const initLogic = <TContract extends GameContract>(
     },
 
     onBeforeAction(name, cb) {
-      // @ts-expect-error not sure how to fix this
-      const eventName: GameEmitterEventName<TContract> = `before-action:${name}`;
+      const eventName = `before-action:${name}`;
 
-      addInterceptor(eventName, cb);
-      return () => removeInterceptor(eventName, cb);
+      emitter.on(eventName, cb);
+      return () => emitter.off(eventName, cb);
     },
 
     onAfterAction(name, cb) {
-      // @ts-expect-error not sure how to fix this
-      const eventName: GameEmitterEventName<TContract> = `after-action:${name}`;
+      const eventName = `after-action:${name}`;
 
-      addInterceptor(eventName, cb);
-      return () => removeInterceptor(eventName, cb);
+      emitter.on(eventName, cb);
+      return () => emitter.off(eventName, cb);
     },
 
     onBeforeEvent(name, cb) {
-      // @ts-expect-error not sure how to fix this
-      const eventName: GameEmitterEventName<TContract> = `before-commit:${name}`;
+      const eventName = `before-commit:${name}`;
 
-      addInterceptor(eventName, cb);
-      return () => removeInterceptor(eventName, cb);
+      emitter.on(eventName, cb);
+      return () => emitter.off(eventName, cb);
     },
 
     onAfterEvent(name, cb) {
-      // @ts-expect-error not sure how to fix this
-      const eventName: GameEmitterEventName<TContract> = `after-commit:${name}`;
+      const eventName = `after-commit:${name}`;
 
-      addInterceptor(eventName, cb);
-      return () => removeInterceptor(eventName, cb);
+      emitter.on(eventName, cb);
+      return () => emitter.off(eventName, cb);
     }
   };
 };

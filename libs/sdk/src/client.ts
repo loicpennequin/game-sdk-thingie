@@ -2,6 +2,7 @@ import { GameContract } from './contract';
 import { Socket } from 'socket.io-client';
 import {
   ActionName,
+  GameEvent,
   GameEventHistory,
   GameLogic,
   GameLogicImplementation,
@@ -16,7 +17,9 @@ export type GameClient<TContract extends GameContract> = {
     name: TName,
     input: z.infer<TContract['actions'][TName]>
   ): void;
-  subscribe(cb: (state: GameState<TContract>) => void): () => void;
+  subscribe(
+    cb: (state: Readonly<GameState<TContract>>, latestEvent: GameEvent<TContract>) => void
+  ): () => void;
   logic: GameLogic<TContract>;
 };
 
@@ -106,7 +109,7 @@ export const initGameClient = <
 
     subscribe(cb) {
       return logic.onAfterEvent('*', ctx => {
-        cb(ctx.state);
+        cb(ctx.state, ctx.event);
       });
     },
 
